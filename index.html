@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conference Tracker | ArcaneWard</title>
+  <meta name="description" content="Talk submissions, CFP deadlines, and which security conferences to apply to next.">
+  <link rel="canonical" href="https://conferences.arcaneward.com/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    try { var t = localStorage.getItem('cf-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="https://arcaneward.com/">ArcaneWard</a>
+      <nav class="jump" aria-label="Sections">
+        <a href="#apply">Apply next</a>
+        <a href="#pending">Pending</a>
+        <a href="#following">Following</a>
+        <a href="#talks">Talks</a>
+        <a href="#log">Log</a>
+      </nav>
+      <button id="themeBtn" class="icon-btn" type="button" aria-label="Toggle dark mode">◐</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro">
+      <h1>Conference Tracker</h1>
+      <p class="sub">Where my talks have gone, what's still out, and which CFPs to hit next. Conference list from
+        <a href="https://github.com/also-here/Conferences" rel="noopener">The Chicago Speakers Guild</a>,
+        <span id="sourceNote">loading…</span></p>
+    </section>
+
+    <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+    <section id="apply" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Apply next</h2>
+          <p class="hint">Open or soon-opening CFPs, ranked by deadline, travel support, distance from Chicago, and how I've done there before.</p>
+        </div>
+        <div class="filters" role="group" aria-label="Recommendation filters">
+          <label class="chk"><input type="checkbox" id="fTravel"> Travel help only</label>
+          <label class="chk"><input type="checkbox" id="fMidwest"> Midwest only</label>
+          <label class="chk"><input type="checkbox" id="fOpen"> Open now only</label>
+        </div>
+      </div>
+      <figure class="chart-card">
+        <figcaption>
+          <span class="chart-title">CFP windows, next six months</span>
+          <span class="legend">
+            <span class="lg"><i class="sw sw-1"></i>CFP window</span>
+            <span class="lg"><i class="sw sw-est"></i>Estimated from last year</span>
+            <span class="lg"><i class="sw sw-today"></i>Today</span>
+          </span>
+        </figcaption>
+        <div id="gantt" class="chart"></div>
+      </figure>
+      <div id="recs" class="cards"></div>
+    </section>
+
+    <section id="pending" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Waiting to hear back</h2>
+          <p class="hint">Submitted talks for conferences that haven't happened yet.</p>
+        </div>
+      </div>
+      <div id="pendingList" class="table-wrap"></div>
+    </section>
+
+    <section id="following" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Conferences I follow</h2>
+          <p class="hint">Everywhere I've submitted, plus any I star. Stars are saved in this browser; list permanent ones in <code>data/following.json</code>.</p>
+        </div>
+        <div class="filters">
+          <div class="seg" role="radiogroup" aria-label="Show">
+            <button type="button" data-view="following" class="on" role="radio" aria-checked="true">Following</button>
+            <button type="button" data-view="all" role="radio" aria-checked="false">All known</button>
+          </div>
+          <input type="search" id="followSearch" placeholder="Search name or city" aria-label="Search conferences">
+        </div>
+      </div>
+      <div id="followTable" class="table-wrap"></div>
+    </section>
+
+    <section id="talks" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Talks &amp; outcomes</h2>
+          <p class="hint">Hover a bar for exact counts. Similar titles are grouped.</p>
+        </div>
+        <button type="button" class="link-btn" id="talksTableBtn" aria-expanded="false">Show as table</button>
+      </div>
+      <div class="two-col">
+        <figure class="chart-card">
+          <figcaption>
+            <span class="chart-title">Submissions per quarter</span>
+            <span class="legend outcome-legend"></span>
+          </figcaption>
+          <div id="quarterChart" class="chart"></div>
+        </figure>
+        <figure class="chart-card">
+          <figcaption>
+            <span class="chart-title">Outcome by talk</span>
+            <span class="legend outcome-legend"></span>
+          </figcaption>
+          <div id="talkChart" class="chart"></div>
+        </figure>
+      </div>
+      <div id="talksTable" class="table-wrap" hidden></div>
+    </section>
+
+    <section id="log" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Submission log</h2>
+          <p class="hint" id="logCount"></p>
+        </div>
+        <div class="filters">
+          <select id="logStatus" aria-label="Filter by response"><option value="">All responses</option></select>
+          <select id="logTalk" aria-label="Filter by talk"><option value="">All talks</option></select>
+          <input type="search" id="logSearch" placeholder="Search" aria-label="Search submissions">
+        </div>
+      </div>
+      <div id="logTable" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Recommendations are heuristics. Dates marked “est.” are projected from last year's listing, so confirm on the conference site before you count on them.</p>
+  </footer>
+
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
