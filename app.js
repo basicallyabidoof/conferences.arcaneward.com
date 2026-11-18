@@ -363,15 +363,24 @@
       return (s.status === 'Submitted' || s.status === 'No Response') && (!cd || cd >= TODAY);
     }).sort((a, b) => (a.expected_reply || '9') < (b.expected_reply || '9') ? -1 : 1);
     if (!rows.length) { $('#pendingList').innerHTML = '<p class="empty">Nothing outstanding.</p>'; return; }
-    $('#pendingList').innerHTML = `<table><thead><tr><th>Conference</th><th>Talk</th><th>Submitted</th><th>Reply expected</th><th>Conference date</th></tr></thead><tbody>${
+    $('#pendingList').innerHTML = `<table><thead><tr><th>Conference</th><th>Talk</th><th>Submitted</th><th>Reply expected</th><th>Conference date</th><th><span class="sr">Actions</span></th></tr></thead><tbody>${
       rows.map(s => {
         const er = parseISO(s.expected_reply);
         const d = er ? days(TODAY, er) : null;
         const when = er ? (d < 0 ? `<span class="overdue">${-d} days overdue</span>` : d === 0 ? 'Today' : `in ${d} days`) : '—';
-        return `<tr><td>${esc(s.conference)}</td><td>${esc(s.talk_raw || s.talk)}</td><td class="nowrap">${fmt(parseISO(s.submitted))}</td>
-          <td class="nowrap">${er ? fmt(er) + ' · ' : ''}${when}</td><td class="nowrap">${fmt(parseISO(s.con_date))}</td></tr>`;
+        return `<tr><td>${esc(s.conference)}${entryBadge(s)}</td><td>${esc(s.talk_raw || s.talk)}</td><td class="nowrap">${fmt(parseISO(s.submitted))}</td>
+          <td class="nowrap">${er ? fmt(er) + ' · ' : ''}${when}</td><td class="nowrap">${fmt(parseISO(s.con_date))}</td>
+          <td class="nowrap">${updateBtn(s)}</td></tr>`;
       }).join('')}</tbody></table>`;
   }
+
+  // Small markers for rows that came from the add form.
+  function entryBadge(x) {
+    if (x._draft) return ' <span class="badge draft" title="Saved in this browser. It goes live for everyone once you commit it on GitHub.">not committed</span>';
+    if (x._edit) return ` <a class="badge" href="${esc(x._edit)}" target="_blank" rel="noopener" title="Edit this entry on GitHub">edit</a>`;
+    return '';
+  }
+  const updateBtn = s => `<button type="button" class="mini-btn" data-update="${esc(s._id)}">Update</button>`;
 
   function sortableTable(container, cols, rows, initial) {
     let sortKey = initial.key, dir = initial.dir;
@@ -401,7 +410,7 @@
     for (const k of keys) {
       const c = confByKey.get(k);
       const hist = subsByKey.get(k) || [];
-      const isFollowed = hist.length > 0 || followed.has(k);
+      const isFollowed = hist.length > 0 || followed.has(k) || !!(c && c.entry);
       if (view === 'following' && !isFollowed) continue;
       if (c && c.section === 'retired' && !hist.length) continue;
       const name = c ? c.name : mostCommon(hist.map(h => h.conference));
@@ -415,17 +424,17 @@
       const st = c ? (c.section === 'retired' ? { state: 'closed', text: 'Retired' } : cfpStatus(c)) : { state: 'unknown', text: 'Not in guild list' };
       const months = hist.map(h => parseISO(h.submitted)).filter(Boolean).map(d => d.getMonth());
       rows.push({
-        key: k, name, url: c ? c.url : '', loc, next, est, st, travel: c ? c.travel : '',
+        key: k, name, url: c ? c.url : '', loc, next, est, st, travel: c ? c.travel : '', entry: c && c.entry,
         n: hist.length, acc: hist.filter(h => h.status === 'Accepted').length,
         usual: months.length ? MON_LABEL[+mostCommon(months)] : '',
-        auto: hist.length > 0, star: followed.has(k),
+        auto: hist.length > 0 || !!(c && c.entry), star: followed.has(k),
       });
     }
     const order = { open: 0, upcoming: 1, unknown: 2, closed: 3 };
     sortableTable($('#followTable'), [
       { key: 'star', label: '<span class="sr">Follow</span>', sortable: false, render: r =>
-        `<button class="star ${r.star || r.auto ? 'on' : ''}" data-k="${esc(r.key)}" ${r.auto ? 'disabled title="Followed because you have submitted here"' : `aria-pressed="${r.star}" title="${r.star ? 'Unfollow' : 'Follow'}"`}>${r.star || r.auto ? '★' : '☆'}</button>` },
-      { key: 'name', label: 'Conference', sort: r => r.name.toLowerCase(), render: r => r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>` : esc(r.name) },
+        `<button class="star ${r.star || r.auto ? 'on' : ''}" data-k="${esc(r.key)}" ${r.auto ? 'disabled title="Followed because you have submitted here or added it"' : `aria-pressed="${r.star}" title="${r.star ? 'Unfollow' : 'Follow'}"`}>${r.star || r.auto ? '★' : '☆'}</button>` },
+      { key: 'name', label: 'Conference', sort: r => r.name.toLowerCase(), render: r => (r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>` : esc(r.name)) + (r.entry ? entryBadge(r.entry) : '') },
       { key: 'loc', label: 'Location' },
       { key: 'next', label: 'Next edition', cls: 'nowrap', render: r => r.next ? fmt(r.next) + (r.est ? ' <span class="note">est.</span>' : '') : '—' },
       { key: 'st', label: 'CFP', sort: r => order[r.st.state] * 1000 + (r.st.closesIn ?? r.st.opensIn ?? 999), render: r => `<span class="cfp ${r.st.state}">${esc(r.st.text)}</span>` },
@@ -562,13 +571,291 @@
     $('#logCount').textContent = `${rows.length} of ${subs.length} submissions`;
     sortableTable($('#logTable'), [
       { key: 'submitted', label: 'Submitted', cls: 'nowrap', render: s => fmt(parseISO(s.submitted)) },
-      { key: 'conference', label: 'Conference', sort: s => s.conference.toLowerCase() },
+      { key: 'conference', label: 'Conference', sort: s => s.conference.toLowerCase(), render: s => esc(s.conference) + entryBadge(s) },
       { key: 'talk_raw', label: 'Talk', sort: s => s.talk.toLowerCase() },
       { key: 'length', label: 'Min', num: true, sort: s => parseFloat(s.length) || null },
       { key: 'status', label: 'Response', render: s => `<span class="status ${esc(s.status)}">${esc(s.status)}</span>` },
       { key: 'location', label: 'Location' },
       { key: 'con_date', label: 'Conference', cls: 'nowrap', render: s => fmt(parseISO(s.con_date)) || esc(s.con_date_raw) },
+      { key: '_act', label: '<span class="sr">Actions</span>', sortable: false, render: updateBtn },
     ], rows, { key: 'submitted', dir: -1 });
+  }
+
+  /* ---------- entries added through the form ---------- */
+  // New talks and tracked conferences live as one JSON file each in data/entries/.
+  // The form opens GitHub's "new file" page pre-filled, so a commit is the save button
+  // and nothing on this public page ever needs a token.
+  const REPO = 'basicallyabidoof/conferences.arcaneward.com';
+  const BRANCH = 'main';
+  const ENTRY_DIR = 'data/entries';
+  const STATUSES = ['Submitted', 'Accepted', 'Denied', 'No Response', 'Retracted'];
+
+  const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const subKey = s => `${confKey(s.conference)}|${norm(s.talk_raw || s.talk)}|${s.submitted || ''}`;
+  const slug = t => String(t || 'entry').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'entry';
+
+  async function loadEntries() {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${ENTRY_DIR}?ref=${BRANCH}`,
+        { headers: { Accept: 'application/vnd.github+json' } });
+      if (r.status === 404) return { files: [], ok: true };
+      if (!r.ok) throw new Error(`GitHub API ${r.status}`);
+      const list = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
+      const files = await Promise.all(list.map(async f => {
+        try {
+          const e = await (await fetch(f.download_url, { cache: 'no-cache' })).json();
+          return { ...e, _file: f.name, _edit: `https://github.com/${REPO}/edit/${BRANCH}/${ENTRY_DIR}/${f.name}` };
+        } catch (err) { console.warn('Skipping unreadable entry', f.name, err); return null; }
+      }));
+      return { files: files.filter(Boolean), ok: true };
+    } catch (err) {
+      console.warn('Could not list entries', err);
+      return { files: [], ok: false };
+    }
+  }
+
+  const drafts = {
+    all: () => store.get('cf-drafts', []),
+    add(e) { store.set('cf-drafts', [...this.all().filter(d => d._file !== e._file), e]); },
+    remove(file) { store.set('cf-drafts', this.all().filter(d => d._file !== file)); },
+    prune(committed) { const have = new Set(committed.map(f => f._file)); store.set('cf-drafts', this.all().filter(d => !have.has(d._file))); },
+  };
+
+  function githubNewFileUrl(file, entry, message) {
+    const body = JSON.stringify(stripMeta(entry), null, 2) + '\n';
+    return `https://github.com/${REPO}/new/${BRANCH}/${ENTRY_DIR}?filename=${encodeURIComponent(file)}` +
+      `&value=${encodeURIComponent(body)}&message=${encodeURIComponent(message)}`;
+  }
+  const stripMeta = e => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith('_')));
+
+  // Spreadsheet rows + entry rows. An entry with `replaces` supersedes the row it updates.
+  function mergeSubmissions(base, entries) {
+    const canon = new Map();
+    for (const s of base) { canon.set(norm(s.talk_raw), s.talk); canon.set(norm(s.talk), s.talk); }
+    const map = new Map();
+    for (const s of base) map.set(subKey(s), { ...s, _id: subKey(s) });
+    for (const e of entries.filter(x => x.type === 'submission')) {
+      if (e.replaces) map.delete(e.replaces);
+      const row = {
+        conference: e.conference || '(unnamed)', talk: canon.get(norm(e.talk)) || e.talk || '(untitled)', talk_raw: e.talk || '',
+        length: e.length || '', submitted: e.submitted || null, status: e.status || 'Submitted', location: e.location || '',
+        con_date: e.con_date || null, con_date_raw: '', expected_reply: e.expected_reply || null,
+        _edit: e._edit, _draft: e._draft, _file: e._file,
+      };
+      row._id = subKey(row);
+      map.set(row._id, row);
+    }
+    return [...map.values()];
+  }
+
+  function entryToConf(e) {
+    const d = parseISO;
+    return {
+      name: e.name, url: e.url || '', starred: false, section: e.midwest ? 'midwest' : 'custom',
+      location: e.location || '', dateRaw: '', cfpRaw: '', travel: e.travel || '?', note: e.note || '',
+      con: e.con_start ? { start: d(e.con_start), end: d(e.con_end || e.con_start) } : null,
+      cfp: e.cfp_open || e.cfp_close ? { start: d(e.cfp_open), end: d(e.cfp_close) } : null,
+      key: confKey(e.name), entry: e,
+    };
+  }
+
+  // A tracked-conference entry fills in or overrides what the guild list says.
+  function mergeConfs(guildConfs, entries) {
+    const byKey = new Map();
+    for (const c of guildConfs) if (!byKey.has(c.key) || c.section !== 'retired') byKey.set(c.key, c);
+    for (const e of entries.filter(x => x.type === 'conference' && x.name)) {
+      const mine = entryToConf(e);
+      const g = byKey.get(mine.key);
+      if (!g) { byKey.set(mine.key, mine); continue; }
+      const m = { ...g, entry: e };
+      for (const f of ['url', 'location', 'note', 'con', 'cfp']) if (mine[f]) m[f] = mine[f];
+      if (e.travel) m.travel = e.travel;
+      if (e.midwest) m.section = 'midwest';
+      if (g.section === 'retired') m.section = 'custom';
+      byKey.set(mine.key, m);
+    }
+    return byKey;
+  }
+
+  /* ---------- state & rendering ---------- */
+  const state = { base: [], generated: '', guildMd: '', guildLive: false, committed: [], entriesOk: true, followFile: [], d: null };
+  const model = {
+    view: 'following', query: '',
+    toggle(k) {
+      const mine = new Set(store.get('cf-follow', []));
+      if (mine.has(k)) mine.delete(k); else mine.add(k);
+      store.set('cf-follow', [...mine]);
+      renderAll();
+    },
+  };
+
+  function renderAll() {
+    const draftList = drafts.all().map(d => ({ ...d, _draft: true }));
+    const entries = [...state.committed].sort((a, b) => a._file < b._file ? -1 : 1).concat(draftList);
+    const subs = mergeSubmissions(state.base, entries);
+    const confByKey = mergeConfs(parseGuild(state.guildMd), entries);
+    for (const [k, c] of confByKey) confByKey.set(k, project(c));
+    const subsByKey = new Map();
+    for (const s of subs) {
+      const k = confKey(s.conference);
+      if (!k || k === 'unnamed') continue;
+      if (!subsByKey.has(k)) subsByKey.set(k, []);
+      subsByKey.get(k).push(s);
+    }
+    const talks = talkStats(subs);
+    const recs = buildRecs([...confByKey.values()], subsByKey, talks);
+    state.d = { subs, confByKey, subsByKey, talks, recs, byId: new Map(subs.map(s => [s._id, s])) };
+
+    const added = state.committed.length;
+    $('#sourceNote').textContent = (state.guildLive
+      ? 'pulled live just now.'
+      : 'using the saved snapshot because the live list was unreachable.') +
+      ` Spreadsheet imported ${state.generated}` + (added ? `, plus ${added} added through the form.` : '.') +
+      (state.entriesOk ? '' : ' (Couldn’t reach GitHub for entries added through the form, so they may be missing.)');
+    const nd = draftList.length;
+    $('#draftNote').hidden = !nd;
+    $('#draftNote').innerHTML = nd ? `${nd} entr${nd === 1 ? 'y isn’t' : 'ies aren’t'} committed yet. <button type="button" class="link-btn" data-open-drafts>Review</button>` : '';
+
+    renderKpis(subs, recs);
+    renderRecs(recs);
+    renderPending(subs);
+    Object.assign(model, { confByKey, subsByKey, followed: new Set([...state.followFile.map(confKey), ...store.get('cf-follow', [])]) });
+    renderFollowing(model);
+    renderQuarterChart(subs); renderTalkChart(talks); renderTalksTable(talks);
+    fillSelect('#logStatus', 'All responses', [...new Set(subs.map(s => s.status))].sort());
+    fillSelect('#logTalk', 'All talks', talks.map(t => t.talk));
+    renderLog(subs);
+    fillDatalists();
+  }
+
+  function fillSelect(sel, allLabel, values) {
+    const el = $(sel), cur = el.value;
+    el.innerHTML = `<option value="">${allLabel}</option>` + values.map(v => `<option>${esc(v)}</option>`).join('');
+    if (values.includes(cur)) el.value = cur;
+  }
+
+  function fillDatalists() {
+    const { confByKey, talks, subs } = state.d;
+    const names = new Set([...confByKey.values()].filter(c => c.section !== 'retired').map(c => c.name));
+    for (const s of subs) if (!confByKey.has(confKey(s.conference))) names.add(s.conference);
+    $('#dlConfs').innerHTML = [...names].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${esc(n)}">`).join('');
+    $('#dlTalks').innerHTML = talks.filter(t => t.talk !== '(untitled)').map(t => `<option value="${esc(t.talk)}">`).join('');
+  }
+
+  /* ---------- add / update form ---------- */
+  const dlg = $('#addDialog');
+  const forms = { submission: $('#subForm'), conference: $('#confForm') };
+
+  function setTab(type) {
+    dlg.querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === type; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    for (const [t, f] of Object.entries(forms)) f.hidden = t !== type;
+    $('#draftPanel').hidden = type !== 'drafts';
+    if (type === 'drafts') renderDrafts();
+  }
+
+  function openForm(type, prefill = {}, replaces = '') {
+    for (const f of Object.values(forms)) f.reset();
+    const f = forms[type];
+    if (f) {
+      // querySelector, not f.elements[k]: a field named "length" collides with elements.length.
+      for (const [k, v] of Object.entries(prefill)) {
+        const el = f.querySelector(`[name="${k}"]`);
+        if (!el || v == null) continue;
+        if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+      }
+      if (type === 'submission' && !prefill.submitted) f.elements.submitted.value = iso(TODAY);
+      f.elements.replaces && (f.elements.replaces.value = replaces);
+      $('#subTitle').textContent = replaces ? 'Update submission' : 'Log a submission';
+    }
+    setTab(type);
+    if (!dlg.open) dlg.showModal();
+    const first = f && f.querySelector('input:not([type=hidden]), select');
+    if (first) first.focus();
+  }
+
+  function formEntry(f, type) {
+    const e = { type };
+    for (const el of f.elements) {
+      if (!el.name) continue;
+      const v = el.type === 'checkbox' ? el.checked : el.value.trim();
+      if (v) e[el.name] = v;
+    }
+    e.added = iso(new Date());
+    return e;
+  }
+
+  function saveEntry(type) {
+    const f = forms[type];
+    if (!f.reportValidity()) return;
+    const e = formEntry(f, type);
+    const now = new Date();
+    const stamp = iso(now).replace(/-/g, '') + '-' + [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join('');
+    const who = type === 'submission' ? `${e.conference}-${e.talk || ''}` : e.name;
+    const file = `${stamp}-${type === 'submission' ? 'talk' : 'conf'}-${slug(who)}.json`;
+    const msg = type === 'submission'
+      ? `${e.replaces ? 'Update' : 'Log'} submission: ${e.talk || 'talk'} → ${e.conference} (${e.status || 'Submitted'})`
+      : `Track conference: ${e.name}`;
+    const draft = { ...e, _file: file, _msg: msg };
+    drafts.add(draft);
+    window.open(githubNewFileUrl(file, e, msg), '_blank', 'noopener');
+    dlg.close();
+    renderAll();
+  }
+
+  function renderDrafts() {
+    const list = drafts.all();
+    $('#draftPanel').innerHTML = list.length
+      ? `<p class="hint">These are saved in this browser only. Open GitHub and click <b>Commit changes</b> to publish one, or discard it.</p><ul class="draft-list">${
+        list.map(d => `<li><div><b>${esc(d.type === 'submission' ? `${d.talk || 'Talk'} → ${d.conference}` : d.name)}</b>
+          <span class="note">${esc(d.type === 'submission' ? d.status || 'Submitted' : 'Tracked conference')} · ${esc(d._file)}</span></div>
+          <div class="draft-actions"><a class="mini-btn" href="${esc(githubNewFileUrl(d._file, d, d._msg || 'Add entry'))}" target="_blank" rel="noopener">Commit on GitHub</a>
+          <button type="button" class="mini-btn" data-discard="${esc(d._file)}">Discard</button></div></li>`).join('')}</ul>`
+      : '<p class="empty">No uncommitted entries.</p>';
+  }
+
+  function bindForm() {
+    $('#addBtn').addEventListener('click', () => openForm('submission'));
+    dlg.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => b.dataset.tab === 'drafts' ? setTab('drafts') : openForm(b.dataset.tab)));
+    dlg.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => dlg.close()));
+    dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+    forms.submission.elements.status.innerHTML = STATUSES.map(s => `<option>${s}</option>`).join('');
+    for (const [type, f] of Object.entries(forms)) f.addEventListener('submit', e => { e.preventDefault(); saveEntry(type); });
+
+    // Picking a known conference pre-fills where and when it is.
+    forms.submission.elements.conference.addEventListener('change', e => {
+      const c = state.d && state.d.confByKey.get(confKey(e.target.value));
+      const f = forms.submission.elements;
+      if (!c) return;
+      if (!f.location.value && c.location) f.location.value = c.location;
+      if (!f.con_date.value && c.con) f.con_date.value = iso(c.con.start);
+      if (!f.expected_reply.value && c.cfp && c.cfp.end) f.expected_reply.value = iso(new Date(+c.cfp.end + 30 * DAY));
+    });
+    forms.conference.elements.name.addEventListener('change', e => {
+      const c = state.d && state.d.confByKey.get(confKey(e.target.value));
+      const f = forms.conference.elements;
+      if (!c) return;
+      const fill = (k, v) => { if (!f[k].value && v) f[k].value = v; };
+      fill('url', c.url); fill('location', c.location);
+      if (c.con) { fill('con_start', iso(c.con.start)); fill('con_end', iso(c.con.end)); }
+      if (c.cfp) { fill('cfp_open', c.cfp.start && iso(c.cfp.start)); fill('cfp_close', c.cfp.end && iso(c.cfp.end)); }
+      if (!f.travel.value && /^yes$/i.test(c.travel)) f.travel.value = 'Yes';
+      else if (!f.travel.value && /^yes/i.test(c.travel)) f.travel.value = 'Partial';
+      else if (!f.travel.value && /^no/i.test(c.travel)) f.travel.value = 'No';
+      f.midwest.checked = f.midwest.checked || c.section === 'midwest';
+    });
+
+    document.addEventListener('click', e => {
+      const up = e.target.closest('[data-update]');
+      if (up) {
+        const s = state.d.byId.get(up.dataset.update);
+        if (s) openForm('submission', { conference: s.conference, talk: s.talk_raw || s.talk, length: s.length, submitted: s.submitted,
+          status: s.status, location: s.location, con_date: s.con_date, expected_reply: s.expected_reply }, s._id);
+      }
+      if (e.target.closest('[data-open-drafts]')) { if (!dlg.open) dlg.showModal(); setTab('drafts'); }
+      const dis = e.target.closest('[data-discard]');
+      if (dis) { drafts.remove(dis.dataset.discard); renderDrafts(); renderAll(); }
+      if (e.target.closest('[data-track]')) openForm('conference');
+    });
   }
 
   /* ---------- boot ---------- */
@@ -584,69 +871,39 @@
   }
 
   async function boot() {
-    const [subsRes, guild, followRes] = await Promise.all([
+    const [subsRes, guild, followRes, entries] = await Promise.all([
       fetch('data/submissions.json').then(r => r.json()),
       loadGuild(),
       fetch('data/following.json').then(r => r.ok ? r.json() : []).catch(() => []),
+      loadEntries(),
     ]);
-    const subs = subsRes.submissions;
-    $('#sourceNote').textContent = guild.live
-      ? `pulled live just now. Submissions updated ${subsRes.generated}.`
-      : `using the saved snapshot because the live list was unreachable. Submissions updated ${subsRes.generated}.`;
+    Object.assign(state, {
+      base: subsRes.submissions, generated: subsRes.generated, guildMd: guild.md, guildLive: guild.live,
+      committed: entries.files, entriesOk: entries.ok, followFile: followRes,
+    });
+    if (entries.ok) drafts.prune(entries.files);
 
-    const confs = parseGuild(guild.md).map(project);
-    const confByKey = new Map();
-    for (const c of confs) if (!confByKey.has(c.key) || c.section !== 'retired') confByKey.set(c.key, c);
-    const subsByKey = new Map();
-    for (const s of subs) {
-      const k = confKey(s.conference);
-      if (!k || k === 'unnamed') continue;
-      if (!subsByKey.has(k)) subsByKey.set(k, []);
-      subsByKey.get(k).push(s);
-    }
-    const talks = talkStats(subs);
-    const recs = buildRecs([...confByKey.values()], subsByKey, talks);
-
-    renderKpis(subs, recs);
-    renderRecs(recs);
-    ['#fTravel', '#fMidwest', '#fOpen'].forEach(id => $(id).addEventListener('change', () => renderRecs(recs)));
-    renderPending(subs);
-
-    const model = {
-      confByKey, subsByKey, view: 'following', query: '',
-      followed: new Set([...followRes.map(confKey), ...store.get('cf-follow', [])]),
-      toggle(k) {
-        const mine = new Set(store.get('cf-follow', []));
-        if (this.followed.has(k)) { this.followed.delete(k); mine.delete(k); } else { this.followed.add(k); mine.add(k); }
-        store.set('cf-follow', [...mine]);
-        renderFollowing(this);
-      },
-    };
-    renderFollowing(model);
+    ['#fTravel', '#fMidwest', '#fOpen'].forEach(id => $(id).addEventListener('change', () => renderRecs(state.d.recs)));
     document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('.seg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
       model.view = b.dataset.view; renderFollowing(model);
     }));
     $('#followSearch').addEventListener('input', e => { model.query = e.target.value.trim().toLowerCase(); renderFollowing(model); });
-
     outcomeLegend();
-    const drawCharts = () => { renderQuarterChart(subs); renderTalkChart(talks); renderRecs(recs); };
-    renderQuarterChart(subs); renderTalkChart(talks);
-    renderTalksTable(talks);
     $('#talksTableBtn').addEventListener('click', e => {
       const t = $('#talksTable'); t.hidden = !t.hidden;
       e.target.setAttribute('aria-expanded', !t.hidden);
       e.target.textContent = t.hidden ? 'Show as table' : 'Hide table';
     });
+    ['#logStatus', '#logTalk'].forEach(id => $(id).addEventListener('change', () => renderLog(state.d.subs)));
+    $('#logSearch').addEventListener('input', () => renderLog(state.d.subs));
+    bindForm();
+    renderAll();
 
-    const statuses = [...new Set(subs.map(s => s.status))].sort();
-    $('#logStatus').insertAdjacentHTML('beforeend', statuses.map(s => `<option>${esc(s)}</option>`).join(''));
-    $('#logTalk').insertAdjacentHTML('beforeend', talks.map(t => `<option>${esc(t.talk)}</option>`).join(''));
-    ['#logStatus', '#logTalk'].forEach(id => $(id).addEventListener('change', () => renderLog(subs)));
-    $('#logSearch').addEventListener('input', () => renderLog(subs));
-    renderLog(subs);
-
-    let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawCharts, 150); });
+    let rt; addEventListener('resize', () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => { renderQuarterChart(state.d.subs); renderTalkChart(state.d.talks); renderRecs(state.d.recs); }, 150);
+    });
   }
 
   $('#themeBtn').addEventListener('click', () => {

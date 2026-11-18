@@ -26,6 +26,7 @@
         <a href="#talks">Talks</a>
         <a href="#log">Log</a>
       </nav>
+      <button id="addBtn" class="add-btn" type="button">+ Add</button>
       <button id="themeBtn" class="icon-btn" type="button" aria-label="Toggle dark mode">◐</button>
     </div>
   </header>
@@ -36,6 +37,7 @@
       <p class="sub">Where my talks have gone, what's still out, and which CFPs to hit next. Conference list from
         <a href="https://github.com/also-here/Conferences" rel="noopener">The Chicago Speakers Guild</a>,
         <span id="sourceNote">loading…</span></p>
+      <p id="draftNote" class="draft-note" hidden></p>
     </section>
 
     <section class="kpis" id="kpis" aria-label="Summary"></section>
@@ -80,9 +82,10 @@
       <div class="panel-head">
         <div>
           <h2>Conferences I follow</h2>
-          <p class="hint">Everywhere I've submitted, plus any I star. Stars are saved in this browser; list permanent ones in <code>data/following.json</code>.</p>
+          <p class="hint">Everywhere I've submitted, plus any I star. Use <b>Track a conference</b> to add one that isn't listed or to correct its dates. Stars are saved in this browser only.</p>
         </div>
         <div class="filters">
+          <button type="button" class="mini-btn" data-track>+ Track a conference</button>
           <div class="seg" role="radiogroup" aria-label="Show">
             <button type="button" data-view="following" class="on" role="radio" aria-checked="true">Following</button>
             <button type="button" data-view="all" role="radio" aria-checked="false">All known</button>
@@ -139,6 +142,54 @@
   <footer class="wrap foot">
     <p>Recommendations are heuristics. Dates marked “est.” are projected from last year's listing, so confirm on the conference site before you count on them.</p>
   </footer>
+
+  <dialog id="addDialog" aria-labelledby="addDialogTitle">
+    <div class="dlg-head">
+      <h2 id="addDialogTitle">Add to tracker</h2>
+      <button type="button" class="icon-btn dark" data-close aria-label="Close">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="submission">Talk submission</button>
+      <button type="button" role="tab" data-tab="conference">Conference to track</button>
+      <button type="button" role="tab" data-tab="drafts">Uncommitted</button>
+    </div>
+
+    <form id="subForm" class="entry-form" novalidate>
+      <h3 id="subTitle">Log a submission</h3>
+      <input type="hidden" name="replaces">
+      <label class="wide">Conference <input name="conference" list="dlConfs" required autocomplete="off" placeholder="e.g. THOTCON"></label>
+      <label class="wide">Talk <input name="talk" list="dlTalks" required autocomplete="off" placeholder="Pick an existing title or type a new one"></label>
+      <label>Submitted <input type="date" name="submitted" required></label>
+      <label>Response <select name="status"></select></label>
+      <label>Length (min) <input name="length" inputmode="numeric" placeholder="40"></label>
+      <label>Location <input name="location" placeholder="City, Country"></label>
+      <label>Conference date <input type="date" name="con_date"></label>
+      <label>Reply expected <input type="date" name="expected_reply"></label>
+      <p class="form-help wide">When you save, GitHub opens in a new tab with the entry filled in, and <b>Commit changes</b> publishes it. It shows up here right away, marked “not committed” until GitHub has it.</p>
+      <div class="form-actions wide"><button type="button" class="mini-btn" data-close>Cancel</button><button type="submit" class="primary-btn">Save to GitHub</button></div>
+    </form>
+
+    <form id="confForm" class="entry-form" novalidate hidden>
+      <h3>Track a conference</h3>
+      <label class="wide">Name <input name="name" list="dlConfs" required autocomplete="off" placeholder="New, or one from the list to correct its details"></label>
+      <label class="wide">Website <input type="url" name="url" placeholder="https://"></label>
+      <label>Location <input name="location" placeholder="City, Country"></label>
+      <label>Travel support
+        <select name="travel"><option value="">Unknown</option><option>Yes</option><option value="Partial">Partial</option><option>No</option></select></label>
+      <label>Conference starts <input type="date" name="con_start"></label>
+      <label>Conference ends <input type="date" name="con_end"></label>
+      <label>CFP opens <input type="date" name="cfp_open"></label>
+      <label>CFP closes <input type="date" name="cfp_close"></label>
+      <label class="chk-row wide"><input type="checkbox" name="midwest"> Midwest or drivable from Chicago</label>
+      <label class="wide">Notes <input name="note" placeholder="Anything worth remembering"></label>
+      <p class="form-help wide">If the conference is already in the guild list, the dates you enter here replace that list's dates on this dashboard.</p>
+      <div class="form-actions wide"><button type="button" class="mini-btn" data-close>Cancel</button><button type="submit" class="primary-btn">Save to GitHub</button></div>
+    </form>
+
+    <div id="draftPanel" hidden></div>
+  </dialog>
+  <datalist id="dlConfs"></datalist>
+  <datalist id="dlTalks"></datalist>
 
   <div id="tip" class="tip" role="tooltip" hidden></div>
   <script src="app.js"></script>
