@@ -1,0 +1,13 @@
+{
+  "type": "submission",
+  "replaces": "ndcsecurity|machineidentityforaisecurity|2026-09-23",
+  "conference": "NDC Security",
+  "talk": "Machine Identity for AI Security",
+  "submitted": "2026-09-23",
+  "status": "Denied",
+  "length": "40",
+  "location": "Oslo, Norway",
+  "con_date": "2027-02-15",
+  "expected_reply": "2026-12-01",
+  "added": "2026-11-20"
+}
